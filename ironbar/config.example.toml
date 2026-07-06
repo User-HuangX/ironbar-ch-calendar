@@ -1,0 +1,10 @@
+# 这是 ironbar 的调用示例片段，请按你的现有 ironbar 配置结构合并。
+# 关键点是用 ironbar 支持的 `label` 模块承载时钟文字，并在左键点击时执行 launch-calendar.sh。
+
+[[end]]
+type = "label"
+name = "calendar"
+class = "clock"
+label = "{{1000:/home/hx/Project/ironbar-ch-calendar/ironbar-clock-label}}"
+on_click_left = "/home/hx/Project/ironbar-ch-calendar/ironbar/launch-calendar.sh"
+justify = "center"

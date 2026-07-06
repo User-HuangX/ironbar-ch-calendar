@@ -1,0 +1,22 @@
+[project]
+name = "ironbar-ch-calendar"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "chinesecalendar>=1.11.0",
+    "lunardate>=0.2.2",
+    "pycairo>=1.0",
+    "pygobject>=3.0",
+]
+
+[project.scripts]
+ironbar-ch-calendar = "ironbar_ch_calendar.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
