@@ -57,38 +57,39 @@ def _detect_ironbar_height() -> int:
 
 MARGIN_TOP = _detect_ironbar_height() - 10
 
-# ── 不透明暗色主题（Linear / Vercel / Stripe 风格）─────────
-BG = (0.055, 0.063, 0.082)           # #0E1015
-HEADER_BG = (0.075, 0.082, 0.106)     # #13151B
-FOOTER_BG = (0.075, 0.082, 0.106)     # #13151B
-TEXT = (0.922, 0.929, 0.945)          # #EBEDF1
-TEXT_MUTED = (0.560, 0.585, 0.650)    # 提高小字可读性
-TEXT_WEEKEND = (0.620, 0.470, 0.500)  # 去饱和玫瑰灰，避免抢今日焦点
-TEXT_HOLIDAY = (0.780, 0.620, 0.470)  # 柔和琥珀色，作为文化提示而非警报
-ACCENT = (0.430, 0.550, 0.820)        # 更灰的蓝，减少科技感
-ACCENT_BG = (0.105, 0.145, 0.245)     # 暗蓝底，克制今日态
-HOVER_BG = (0.137, 0.149, 0.204)      # #232634
-BTN_BG = (0.094, 0.102, 0.145)        # #181A25
-BTN_HOVER = (0.157, 0.169, 0.231)     # #282B3B
-DIVIDER = (0.114, 0.122, 0.161)       # #1D1F29
-BORDER = (0.180, 0.192, 0.245)        # #2E313E
-WEEKEND_TINT = (0.070, 0.064, 0.080)  # 极弱暖色列底，只做区域提示
-WHITE = (0.965, 0.969, 0.976)         # #F6F7F9
+# ── 轻量浅色主题（贴近透明 WM / ironbar）──────────────────
+# 不使用窗口级透明，避免文字一起变淡；通过更浅的冷灰面板降低压迫感。
+BG = (0.930, 0.945, 0.965)            # #EDF1F6
+HEADER_BG = (0.900, 0.920, 0.945)     # #E6EAF1
+FOOTER_BG = (0.900, 0.920, 0.945)     # #E6EAF1
+TEXT = (0.120, 0.145, 0.180)          # #1F2530
+TEXT_MUTED = (0.430, 0.470, 0.530)    # #6E7887
+TEXT_WEEKEND = (0.570, 0.180, 0.220)  # 褐红，保证浅粉底上的对比度
+TEXT_HOLIDAY = (0.720, 0.430, 0.160)  # 柔和琥珀，不用警报红
+ACCENT = (0.255, 0.455, 0.760)        # 灰蓝主色
+ACCENT_BG = (0.810, 0.865, 0.955)     # 浅蓝今日底
+HOVER_BG = (0.870, 0.895, 0.930)      # 轻 hover
+BTN_BG = (0.905, 0.925, 0.950)        # 浅按钮底
+BTN_HOVER = (0.835, 0.875, 0.930)     # 浅蓝 hover
+DIVIDER = (0.760, 0.795, 0.845)       # 冷灰分割线
+BORDER = (0.690, 0.735, 0.795)        # 外框
+WEEKEND_TINT = (0.940, 0.905, 0.915)  # 极淡暖色列底
+WHITE = (0.980, 0.985, 0.995)         # 选中态文字
 
 # 按钮专用
-CLOSE_DEFAULT = (0.510, 0.529, 0.580)  # 同 muted
-CLOSE_HOVER = (0.922, 0.294, 0.294)    # #EB4B4B
-ARROW_DEFAULT = (0.627, 0.647, 0.686)  # #A0A5AF
-ARROW_HOVER = (0.863, 0.882, 0.922)    # #DCE1E9
+CLOSE_DEFAULT = (0.430, 0.470, 0.530)
+CLOSE_HOVER = (0.760, 0.220, 0.260)
+ARROW_DEFAULT = (0.400, 0.445, 0.510)
+ARROW_HOVER = (0.120, 0.145, 0.180)
 
 # 今日光环
-GLOW_OUTER = (0.216, 0.431, 0.686)     # #376EAF
+GLOW_OUTER = (0.600, 0.710, 0.900)
 GLOW_INNER = ACCENT
 
 # 角标颜色保留给后续事件功能，当前视觉方案默认不绘制角标
-HOLIDAY_DOT = (0.780, 0.620, 0.470)
-FESTIVAL_DOT = (0.780, 0.620, 0.470)
-ADJUSTED_DOT = (0.510, 0.529, 0.580)
+HOLIDAY_DOT = TEXT_HOLIDAY
+FESTIVAL_DOT = TEXT_HOLIDAY
+ADJUSTED_DOT = TEXT_MUTED
 
 
 def _rgb(cr, rgb):
@@ -230,7 +231,7 @@ class CalendarWidget(Gtk.DrawingArea):
         color = CLOSE_HOVER if is_close_hover else CLOSE_DEFAULT
 
         if is_close_hover:
-            _rgb(cr, (0.30, 0.18, 0.18))
+            _rgb(cr, (0.975, 0.865, 0.875))
             cr.set_line_width(1)
             cr.arc(cx, cy, 11, 0, 6.283); cr.stroke()
 
