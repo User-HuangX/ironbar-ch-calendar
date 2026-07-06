@@ -19,7 +19,7 @@ import gi  # noqa: E402
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
-from gi.repository import Gtk, Gtk4LayerShell, GLib  # noqa: E402
+from gi.repository import Gtk, Gtk4LayerShell  # noqa: E402
 
 from .calendar_service import CalendarService
 
@@ -62,16 +62,17 @@ BG = (0.055, 0.063, 0.082)           # #0E1015
 HEADER_BG = (0.075, 0.082, 0.106)     # #13151B
 FOOTER_BG = (0.075, 0.082, 0.106)     # #13151B
 TEXT = (0.922, 0.929, 0.945)          # #EBEDF1
-TEXT_MUTED = (0.435, 0.463, 0.514)    # #6F7683
-TEXT_WEEKEND = (0.780, 0.490, 0.490)  # #C77D7D
-TEXT_HOLIDAY = (0.878, 0.408, 0.408)  # #E06868
-ACCENT = (0.376, 0.498, 0.914)        # #607FE9
-ACCENT_BG = (0.106, 0.157, 0.286)     # #1B2849
+TEXT_MUTED = (0.560, 0.585, 0.650)    # 提高小字可读性
+TEXT_WEEKEND = (0.620, 0.470, 0.500)  # 去饱和玫瑰灰，避免抢今日焦点
+TEXT_HOLIDAY = (0.780, 0.620, 0.470)  # 柔和琥珀色，作为文化提示而非警报
+ACCENT = (0.430, 0.550, 0.820)        # 更灰的蓝，减少科技感
+ACCENT_BG = (0.105, 0.145, 0.245)     # 暗蓝底，克制今日态
 HOVER_BG = (0.137, 0.149, 0.204)      # #232634
 BTN_BG = (0.094, 0.102, 0.145)        # #181A25
 BTN_HOVER = (0.157, 0.169, 0.231)     # #282B3B
 DIVIDER = (0.114, 0.122, 0.161)       # #1D1F29
-WEEKEND_TINT = (0.065, 0.060, 0.082)  # #110F15
+BORDER = (0.180, 0.192, 0.245)        # #2E313E
+WEEKEND_TINT = (0.070, 0.064, 0.080)  # 极弱暖色列底，只做区域提示
 WHITE = (0.965, 0.969, 0.976)         # #F6F7F9
 
 # 按钮专用
@@ -84,10 +85,10 @@ ARROW_HOVER = (0.863, 0.882, 0.922)    # #DCE1E9
 GLOW_OUTER = (0.216, 0.431, 0.686)     # #376EAF
 GLOW_INNER = ACCENT
 
-# 角标
-HOLIDAY_DOT = (0.878, 0.408, 0.408)    # 红
-FESTIVAL_DOT = (0.902, 0.627, 0.263)   # 橙
-ADJUSTED_DOT = (0.510, 0.529, 0.580)   # 灰
+# 角标颜色保留给后续事件功能，当前视觉方案默认不绘制角标
+HOLIDAY_DOT = (0.780, 0.620, 0.470)
+FESTIVAL_DOT = (0.780, 0.620, 0.470)
+ADJUSTED_DOT = (0.510, 0.529, 0.580)
 
 
 def _rgb(cr, rgb):
@@ -201,6 +202,10 @@ class CalendarWidget(Gtk.DrawingArea):
         self._draw_weekdays(cr)
         self._draw_cells(cr)
         self._draw_footer(cr)
+        _rgb(cr, BORDER)
+        cr.set_line_width(1)
+        cr.rectangle(0.5, 0.5, w - 1, h - 1)
+        cr.stroke()
 
     # ── 头部 ────────────────────────────────────────────────
 
@@ -234,11 +239,18 @@ class CalendarWidget(Gtk.DrawingArea):
         cr.move_to(cx - r, cy - r); cr.line_to(cx + r, cy + r); cr.stroke()
         cr.move_to(cx + r, cy - r); cr.line_to(cx - r, cy + r); cr.stroke()
 
-        # 今天按钮
+        # 今天按钮：默认只用细边框，避免在头部形成第二个强焦点
         bx, by, bw, bh = W - 124, 10, 52, 22
-        _rgb(cr, BTN_HOVER if self._hover_btn == "today" else BTN_BG)
-        _rrect(cr, bx, by, bw, bh, 10); cr.fill()
-        _rgb(cr, TEXT)
+        if self._hover_btn == "today":
+            _rgb(cr, BTN_HOVER)
+            _rrect(cr, bx, by, bw, bh, 10); cr.fill()
+            label_color = TEXT
+        else:
+            _rgb(cr, BORDER)
+            cr.set_line_width(1)
+            _rrect(cr, bx, by, bw, bh, 10); cr.stroke()
+            label_color = TEXT_MUTED
+        _rgb(cr, label_color)
         _font(cr, 11, cairo.FontWeight.BOLD)
         t_ext = cr.text_extents("今天")
         cr.move_to(bx + bw / 2 - t_ext.width / 2, by + 15); cr.show_text("今天")
@@ -338,16 +350,8 @@ class CalendarWidget(Gtk.DrawingArea):
         ext = cr.text_extents(ds)
         cr.move_to(cx + cw / 2 - ext.width / 2, cy + 23); cr.show_text(ds)
 
-        # 角标
-        has_dot = (info.holiday_name or info.festival or info.is_adjusted_workday) and in_month and not is_sel
-        if has_dot:
-            if info.holiday_name:
-                _rgb(cr, HOLIDAY_DOT); dr = 4
-            elif info.festival:
-                _rgb(cr, FESTIVAL_DOT); dr = 4
-            else:
-                _rgb(cr, ADJUSTED_DOT); dr = 3
-            cr.arc(cx + cw - 8, cy + 8, dr, 0, 6.283); cr.fill()
+        # 节日不再绘制彩色角标，避免和今日强调色竞争。
+        # 节日信息保留在副文本和底部信息栏中。
 
         # 农历
         sub = info.badge or info.lunar_label
@@ -392,18 +396,11 @@ class CalendarWidget(Gtk.DrawingArea):
         # 节日下划线
         if info.holiday_name or info.festival:
             ext_d = cr.text_extents(detail)
-            _rgb(cr, ACCENT)
+            _rgb(cr, TEXT_HOLIDAY)
             cr.set_line_width(2)
             cr.move_to(px + pw + 14, fy + 31)
-            cr.line_to(px + pw + 14 + ext_d.width, fy + 31)
+            cr.line_to(px + pw + 14 + min(ext_d.width, 220), fy + 31)
             cr.stroke()
-
-        # 快捷键提示
-        _rgb(cr, TEXT_MUTED)
-        _font(cr, 10)
-        hint = "← → 翻月  ·  Esc 关闭"
-        h_ext = cr.text_extents(hint)
-        cr.move_to(W - h_ext.width - 16, fy + 38); cr.show_text(hint)
 
 
 # ── 工具 ────────────────────────────────────────────────────
@@ -456,7 +453,6 @@ def _pick_monitor(win) -> None:
                            capture_output=True, text=True, timeout=3)
         name = r.stdout.strip()
         if name:
-            from gi.repository import Gdk  # noqa: E402
             display = Gtk.Widget.get_display(win)
             for m in display.get_monitors():
                 if m.get_connector() == name:

@@ -213,5 +213,7 @@ class CalendarService:
             "mid_autumn_festival": "中秋节",
             "national_day": "国庆节",
         }
-        normalized = name.lower().replace("holiday.", "").replace(" ", "_").replace("-", "_")
+        normalized = (
+            name.lower().replace("holiday.", "").replace(" ", "_").replace("-", "_")
+        )
         return mapping.get(normalized, name)
