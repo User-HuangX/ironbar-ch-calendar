@@ -19,7 +19,7 @@ import gi  # noqa: E402
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
-from gi.repository import Gtk, Gtk4LayerShell, GLib  # noqa: E402
+from gi.repository import Gtk, Gtk4LayerShell, GLib, Gdk  # noqa: E402
 
 from .calendar_service import CalendarService
 
@@ -66,20 +66,20 @@ def _detect_ironbar_height() -> int:
 MARGIN_TOP = _detect_ironbar_height() - 10
 
 # ── 配色（蓝色调，参考 macOS / Google Calendar / Notion）───
-BG = (0.965, 0.968, 0.976, 0.88)
-HEADER_BG = (0.945, 0.953, 0.965, 0.92)
-FOOTER_BG = (0.941, 0.949, 0.961, 0.92)
+BG = (0.965, 0.968, 0.976, 0.55)
+HEADER_BG = (0.945, 0.953, 0.965, 0.65)
+FOOTER_BG = (0.941, 0.949, 0.961, 0.65)
 TEXT = (0.078, 0.098, 0.137, 1.0)
 TEXT_MUTED = (0.557, 0.596, 0.639, 1.0)
 TEXT_WEEKEND = (0.839, 0.345, 0.345, 1.0)
 TEXT_HOLIDAY = (0.902, 0.216, 0.216, 1.0)
 ACCENT = (0.129, 0.467, 0.922, 1.0)
-ACCENT_BG = (0.824, 0.902, 0.980, 0.85)
-HOVER_BG = (0.902, 0.929, 0.957, 0.80)
-BTN_BG = (0.906, 0.925, 0.945, 0.70)
-BTN_HOVER = (0.855, 0.882, 0.914, 0.85)
-DIVIDER = (0.890, 0.902, 0.918, 0.80)
-WEEKEND_TINT = (0.973, 0.949, 0.949, 0.50)
+ACCENT_BG = (0.824, 0.902, 0.980, 0.65)
+HOVER_BG = (0.902, 0.929, 0.957, 0.65)
+BTN_BG = (0.906, 0.925, 0.945, 0.60)
+BTN_HOVER = (0.855, 0.882, 0.914, 0.75)
+DIVIDER = (0.890, 0.902, 0.918, 0.60)
+WEEKEND_TINT = (0.973, 0.949, 0.949, 0.40)
 WHITE = (1, 1, 1, 1)
 HOLIDAY_DOT = (0.902, 0.216, 0.216, 0.85)
 FESTIVAL_DOT = (0.945, 0.624, 0.208, 0.80)
@@ -198,12 +198,27 @@ class CalendarWidget(Gtk.DrawingArea):
     # ── 渲染入口 ────────────────────────────────────────────
 
     def _on_draw(self, area, cr, w, h):
+        # 底部圆角裁剪（顶部直角贴合 bar）
+        self._clip_bottom_rounded(cr, w, h)
         _rgba(cr, BG); cr.paint()
         self._draw_header(cr)
         self._draw_weekend_tint(cr)
         self._draw_weekdays(cr)
         self._draw_cells(cr)
         self._draw_footer(cr)
+
+    def _clip_bottom_rounded(self, cr, w, h):
+        """底部 12px 圆角裁剪，顶部直角。"""
+        r = 12
+        cr.new_sub_path()
+        cr.move_to(0, 0)
+        cr.line_to(w, 0)
+        cr.line_to(w, h - r)
+        cr.arc(w - r, h - r, r, 0, 1.5708)
+        cr.line_to(r, h)
+        cr.arc(r, h - r, r, 1.5708, 3.14159)
+        cr.close_path()
+        cr.clip()
 
     # ── 头部 ────────────────────────────────────────────────
 
@@ -396,6 +411,14 @@ def run_layer_shell_calendar() -> int:
 
 
 def _on_activate(app: Gtk.Application) -> None:
+    # CSS: DrawingArea 透明背景
+    css = Gtk.CssProvider()
+    css.load_from_data(b"drawingarea.transparent { background: transparent; }")
+    Gtk.StyleContext.add_provider_for_display(
+        Gdk.Display.get_default(),
+        css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+    )
+
     win = Gtk.ApplicationWindow(application=app)
     win.set_title("中文日历")
     win.set_resizable(False)
@@ -412,6 +435,7 @@ def _on_activate(app: Gtk.Application) -> None:
 
     cal = CalendarWidget()
     cal.set_size_request(W, H)
+    cal.add_css_class("transparent")
     win.set_child(cal)
     win.present()
 
