@@ -32,7 +32,6 @@ CELL_W, CELL_H = 68, 56
 GRID_X = 24
 GRID_Y = HEADER_H + 24
 GAP = 6
-CORNER_R = 12
 
 FONT = "Noto Sans CJK SC"
 
@@ -58,19 +57,19 @@ def _detect_ironbar_height() -> int:
 MARGIN_TOP = _detect_ironbar_height() - 10
 
 # ── 暗色主题 ────────────────────────────────────────────────
-BG = (0.12, 0.13, 0.16, 0.78)
-HEADER_BG = (0.15, 0.16, 0.19, 0.85)
-FOOTER_BG_TOP = (0.15, 0.16, 0.19, 0.85)
-FOOTER_BG_BOT = (0.10, 0.11, 0.14, 0.70)
+BG = (0.12, 0.13, 0.16, 0.40)
+HEADER_BG = (0.15, 0.16, 0.19, 0.45)
+FOOTER_BG_TOP = (0.15, 0.16, 0.19, 0.45)
+FOOTER_BG_BOT = (0.10, 0.11, 0.14, 0.35)
 TEXT = (0.90, 0.92, 0.95, 1.0)
 TEXT_MUTED = (0.50, 0.53, 0.58, 1.0)
 TEXT_WEEKEND = (0.85, 0.45, 0.45, 1.0)
 TEXT_HOLIDAY = (0.95, 0.35, 0.35, 1.0)
 ACCENT = (0.35, 0.65, 0.95, 1.0)
-ACCENT_BG = (0.18, 0.28, 0.45, 0.65)
-HOVER_BG = (0.20, 0.22, 0.28, 0.60)
-BTN_BG = (0.18, 0.19, 0.23, 0.55)
-BTN_HOVER = (0.22, 0.24, 0.29, 0.70)
+ACCENT_BG = (0.18, 0.28, 0.45, 0.45)
+HOVER_BG = (0.20, 0.22, 0.28, 0.40)
+BTN_BG = (0.18, 0.19, 0.23, 0.35)
+BTN_HOVER = (0.22, 0.24, 0.29, 0.50)
 DIVIDER = (0.20, 0.21, 0.26, 0.70)
 WEEKEND_TINT = (0.15, 0.12, 0.12, 0.35)
 WHITE = (0.95, 0.96, 0.97, 1.0)
@@ -183,30 +182,12 @@ class CalendarWidget(Gtk.DrawingArea):
     # ── 渲染 ────────────────────────────────────────────────
 
     def _on_draw(self, area, cr, w, h):
-        # 清除为全透明
-        cr.save()
-        cr.set_operator(cairo.Operator.CLEAR)
-        cr.paint()
-        cr.restore()
-
-        # 底部圆角裁剪
-        cr.save()
-        _clip_bottom_rounded(cr, w, h, CORNER_R)
-
-        # 毛玻璃背景
         _rgba(cr, BG); cr.paint()
         self._draw_header(cr)
         self._draw_weekend_tint(cr)
         self._draw_weekdays(cr)
         self._draw_cells(cr)
         self._draw_footer(cr)
-
-        # 底部圆角边框
-        cr.set_line_width(1)
-        _rgba(cr, DIVIDER)
-        _stroke_bottom_rounded(cr, w, h, CORNER_R)
-
-        cr.restore()
 
     # ── 头部 ────────────────────────────────────────────────
 
@@ -366,30 +347,6 @@ def _rrect(cr, x, y, w, h, r):
     cr.close_path()
 
 
-def _clip_bottom_rounded(cr, w, h, r):
-    cr.new_sub_path()
-    cr.move_to(0, 0)
-    cr.line_to(w, 0)
-    cr.line_to(w, h - r)
-    cr.arc(w - r, h - r, r, 0, 1.5708)
-    cr.line_to(r, h)
-    cr.arc(r, h - r, r, 1.5708, 3.14159)
-    cr.close_path()
-    cr.clip()
-
-
-def _stroke_bottom_rounded(cr, w, h, r):
-    cr.new_sub_path()
-    cr.move_to(0, 0)
-    cr.line_to(w, 0)
-    cr.line_to(w, h - r)
-    cr.arc(w - r, h - r, r, 0, 1.5708)
-    cr.line_to(r, h)
-    cr.arc(r, h - r, r, 1.5708, 3.14159)
-    cr.close_path()
-    cr.stroke()
-
-
 # ── 入口 ────────────────────────────────────────────────────
 
 def run_layer_shell_calendar() -> int:
@@ -405,6 +362,8 @@ def _on_activate(app: Gtk.Application) -> None:
     win = Gtk.ApplicationWindow(application=app)
     win.set_title("中文日历")
     win.set_resizable(False)
+    # 背景透明，文字保持不透明
+    win.add_css_class("transparent-bg")
 
     Gtk4LayerShell.init_for_window(win)
     Gtk4LayerShell.set_namespace(win, "ironbar-ch-calendar")
