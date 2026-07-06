@@ -25,7 +25,6 @@ from .calendar_service import CalendarService
 
 logger = logging.getLogger(__name__)
 
-# ── 尺寸常量 ────────────────────────────────────────────────
 W, H = 560, 500
 HEADER_H = 40
 FOOTER_H = 48
@@ -33,10 +32,9 @@ CELL_W, CELL_H = 68, 56
 GRID_X = 24
 GRID_Y = HEADER_H + 24
 GAP = 6
+CORNER_R = 12
 
-# ── 字体 ────────────────────────────────────────────────────
 FONT = "Noto Sans CJK SC"
-FONT_FALLBACK = "Sans"
 
 
 def _font(cr, size, weight=cairo.FontWeight.NORMAL):
@@ -45,19 +43,13 @@ def _font(cr, size, weight=cairo.FontWeight.NORMAL):
 
 
 def _detect_ironbar_height() -> int:
-    config_paths = [
-        Path.home() / ".config" / "ironbar" / "config.corn",
-        Path.home() / ".config" / "ironbar" / "config.toml",
-    ]
-    for p in config_paths:
+    for p in [Path.home() / ".config/ironbar/config.corn",
+              Path.home() / ".config/ironbar/config.toml"]:
         if p.exists():
             try:
-                text = p.read_text()
-                m = re.search(r'height\s*=\s*(\d+)', text)
+                m = re.search(r'height\s*=\s*(\d+)', p.read_text())
                 if m:
-                    h = int(m.group(1))
-                    logger.info("从 %s 读取 ironbar 高度：%dpx", p, h)
-                    return h
+                    return int(m.group(1))
             except OSError:
                 pass
     return 30
@@ -65,24 +57,25 @@ def _detect_ironbar_height() -> int:
 
 MARGIN_TOP = _detect_ironbar_height() - 10
 
-# ── 配色（蓝色调，参考 macOS / Google Calendar / Notion）───
-BG = (0.965, 0.968, 0.976, 0.55)
-HEADER_BG = (0.945, 0.953, 0.965, 0.65)
-FOOTER_BG = (0.941, 0.949, 0.961, 0.65)
-TEXT = (0.078, 0.098, 0.137, 1.0)
-TEXT_MUTED = (0.557, 0.596, 0.639, 1.0)
-TEXT_WEEKEND = (0.839, 0.345, 0.345, 1.0)
-TEXT_HOLIDAY = (0.902, 0.216, 0.216, 1.0)
-ACCENT = (0.129, 0.467, 0.922, 1.0)
-ACCENT_BG = (0.824, 0.902, 0.980, 0.65)
-HOVER_BG = (0.902, 0.929, 0.957, 0.65)
-BTN_BG = (0.906, 0.925, 0.945, 0.60)
-BTN_HOVER = (0.855, 0.882, 0.914, 0.75)
-DIVIDER = (0.890, 0.902, 0.918, 0.60)
-WEEKEND_TINT = (0.973, 0.949, 0.949, 0.40)
-WHITE = (1, 1, 1, 1)
-HOLIDAY_DOT = (0.902, 0.216, 0.216, 0.85)
-FESTIVAL_DOT = (0.945, 0.624, 0.208, 0.80)
+# ── 暗色主题 ────────────────────────────────────────────────
+BG = (0.12, 0.13, 0.16, 0.78)
+HEADER_BG = (0.15, 0.16, 0.19, 0.85)
+FOOTER_BG_TOP = (0.15, 0.16, 0.19, 0.85)
+FOOTER_BG_BOT = (0.10, 0.11, 0.14, 0.70)
+TEXT = (0.90, 0.92, 0.95, 1.0)
+TEXT_MUTED = (0.50, 0.53, 0.58, 1.0)
+TEXT_WEEKEND = (0.85, 0.45, 0.45, 1.0)
+TEXT_HOLIDAY = (0.95, 0.35, 0.35, 1.0)
+ACCENT = (0.35, 0.65, 0.95, 1.0)
+ACCENT_BG = (0.18, 0.28, 0.45, 0.65)
+HOVER_BG = (0.20, 0.22, 0.28, 0.60)
+BTN_BG = (0.18, 0.19, 0.23, 0.55)
+BTN_HOVER = (0.22, 0.24, 0.29, 0.70)
+DIVIDER = (0.20, 0.21, 0.26, 0.70)
+WEEKEND_TINT = (0.15, 0.12, 0.12, 0.35)
+WHITE = (0.95, 0.96, 0.97, 1.0)
+HOLIDAY_DOT = (0.95, 0.35, 0.35, 0.90)
+FESTIVAL_DOT = (0.95, 0.65, 0.25, 0.85)
 
 
 def _rgba(cr, rgba):
@@ -96,7 +89,7 @@ class CalendarWidget(Gtk.DrawingArea):
         t = date.today()
         self._year, self._month, self._sel = t.year, t.month, t
         self._hover_cell: tuple[int, int] | None = None
-        self._hover_btn: str | None = None  # "prev" | "today" | "next" | "close"
+        self._hover_btn: str | None = None
         self.set_size_request(W, H)
         self.set_draw_func(self._on_draw)
 
@@ -116,18 +109,14 @@ class CalendarWidget(Gtk.DrawingArea):
     # ── 日历逻辑 ────────────────────────────────────────────
 
     def _prev_month(self):
-        if self._month == 1:
-            self._year -= 1; self._month = 12
-        else:
-            self._month -= 1
+        if self._month == 1: self._year -= 1; self._month = 12
+        else: self._month -= 1
         self._sel = date(self._year, self._month, 1)
         self.queue_draw()
 
     def _next_month(self):
-        if self._month == 12:
-            self._year += 1; self._month = 1
-        else:
-            self._month += 1
+        if self._month == 12: self._year += 1; self._month = 1
+        else: self._month += 1
         self._sel = date(self._year, self._month, 1)
         self.queue_draw()
 
@@ -158,17 +147,15 @@ class CalendarWidget(Gtk.DrawingArea):
     # ── 输入 ────────────────────────────────────────────────
 
     def _on_motion(self, controller, x, y):
-        old_cell = self._hover_cell
-        old_btn = self._hover_btn
+        old_cell, old_btn = self._hover_cell, self._hover_btn
         self._hover_cell = self._hit_cell(x, y)
         self._hover_btn = self._hit_header(x, y)
         if old_cell != self._hover_cell or old_btn != self._hover_btn:
             self.queue_draw()
 
     def _on_leave(self, controller):
-        if self._hover_cell is not None or self._hover_btn is not None:
-            self._hover_cell = None
-            self._hover_btn = None
+        if self._hover_cell or self._hover_btn:
+            self._hover_cell = self._hover_btn = None
             self.queue_draw()
 
     def _hit_header(self, x, y):
@@ -190,16 +177,23 @@ class CalendarWidget(Gtk.DrawingArea):
             if cell: self._click_cell(*cell)
 
     def _on_key(self, controller, keyval, keycode, state):
-        if keyval == 65307:
-            self.get_root().close()
-            return True
+        if keyval == 65307: self.get_root().close(); return True
         return False
 
-    # ── 渲染入口 ────────────────────────────────────────────
+    # ── 渲染 ────────────────────────────────────────────────
 
     def _on_draw(self, area, cr, w, h):
-        # 底部圆角裁剪（顶部直角贴合 bar）
-        self._clip_bottom_rounded(cr, w, h)
+        # 清除为全透明
+        cr.save()
+        cr.set_operator(cairo.Operator.CLEAR)
+        cr.paint()
+        cr.restore()
+
+        # 底部圆角裁剪
+        cr.save()
+        _clip_bottom_rounded(cr, w, h, CORNER_R)
+
+        # 毛玻璃背景
         _rgba(cr, BG); cr.paint()
         self._draw_header(cr)
         self._draw_weekend_tint(cr)
@@ -207,18 +201,12 @@ class CalendarWidget(Gtk.DrawingArea):
         self._draw_cells(cr)
         self._draw_footer(cr)
 
-    def _clip_bottom_rounded(self, cr, w, h):
-        """底部 12px 圆角裁剪，顶部直角。"""
-        r = 12
-        cr.new_sub_path()
-        cr.move_to(0, 0)
-        cr.line_to(w, 0)
-        cr.line_to(w, h - r)
-        cr.arc(w - r, h - r, r, 0, 1.5708)
-        cr.line_to(r, h)
-        cr.arc(r, h - r, r, 1.5708, 3.14159)
-        cr.close_path()
-        cr.clip()
+        # 底部圆角边框
+        cr.set_line_width(1)
+        _rgba(cr, DIVIDER)
+        _stroke_bottom_rounded(cr, w, h, CORNER_R)
+
+        cr.restore()
 
     # ── 头部 ────────────────────────────────────────────────
 
@@ -226,32 +214,25 @@ class CalendarWidget(Gtk.DrawingArea):
         _rgba(cr, HEADER_BG)
         cr.rectangle(0, 0, W, HEADER_H); cr.fill()
 
-        # 标题
         _rgba(cr, TEXT)
         _font(cr, 15, cairo.FontWeight.BOLD)
         title = f"{self._year} 年 {self._month} 月"
         ext = cr.text_extents(title)
         cr.move_to(W / 2 - ext.width / 2, 28); cr.show_text(title)
 
-        # 导航
         _font(cr, 18)
         cr.move_to(14, 28); cr.show_text("‹")
         cr.move_to(W - 50, 28); cr.show_text("›")
 
-        # ✕ 按钮
-        cx, cy = W - 20, 20
-        r = 8
-        is_hover = self._hover_btn == "close"
-        _rgba(cr, (0.8, 0.2, 0.2, 0.9) if is_hover else TEXT_MUTED)
-        cr.set_line_width(2 if is_hover else 1.8)
+        cx, cy, r = W - 20, 20, 8
+        _rgba(cr, (0.85, 0.3, 0.3, 0.9) if self._hover_btn == "close" else TEXT_MUTED)
+        cr.set_line_width(2 if self._hover_btn == "close" else 1.8)
         cr.move_to(cx - r / 2, cy - r / 2); cr.line_to(cx + r / 2, cy + r / 2)
         cr.stroke()
         cr.move_to(cx + r / 2, cy - r / 2); cr.line_to(cx - r / 2, cy + r / 2)
         cr.stroke()
 
-        # 今天按钮
-        bx, by = W - 124, 9
-        bw, bh = 52, 22
+        bx, by, bw, bh = W - 124, 9, 52, 22
         _rgba(cr, BTN_HOVER if self._hover_btn == "today" else BTN_BG)
         _rrect(cr, bx, by, bw, bh, 8); cr.fill()
         _rgba(cr, TEXT)
@@ -292,14 +273,13 @@ class CalendarWidget(Gtk.DrawingArea):
     def _draw_cell(self, cr, x, y, d, info, today, col, row):
         cw, ch = CELL_W - GAP, CELL_H - GAP
         cx, cy = x + GAP / 2, y + GAP / 2
-        r = 8 if (d == self._sel or d == today) else 6
+        r = 8 if d in (self._sel, today) else 6
         in_month = d.month == self._month
         is_today = d == today
         is_sel = d == self._sel
         is_hover = self._hover_cell == (col, row)
         is_weekend = col >= 5
 
-        # 背景
         if is_sel:
             _rgba(cr, ACCENT)
         elif is_today:
@@ -310,23 +290,16 @@ class CalendarWidget(Gtk.DrawingArea):
             cr.set_source_rgba(0, 0, 0, 0)
         _rrect(cr, cx, cy, cw, ch, r); cr.fill()
 
-        # 今日光环
         if is_today and not is_sel:
             _rgba(cr, ACCENT)
             cr.set_line_width(2)
             _rrect(cr, cx, cy, cw, ch, r); cr.stroke()
 
-        # 日期数字
-        if is_sel:
-            fg = WHITE
-        elif info.holiday_name and in_month:
-            fg = TEXT_HOLIDAY
-        elif is_weekend and in_month:
-            fg = TEXT_WEEKEND
-        elif not in_month:
-            fg = (*TEXT_MUTED[:3], 0.45)
-        else:
-            fg = TEXT
+        if is_sel: fg = WHITE
+        elif info.holiday_name and in_month: fg = TEXT_HOLIDAY
+        elif is_weekend and in_month: fg = TEXT_WEEKEND
+        elif not in_month: fg = (*TEXT_MUTED[:3], 0.35)
+        else: fg = TEXT
 
         _rgba(cr, fg)
         _font(cr, 15, cairo.FontWeight.BOLD if is_today else cairo.FontWeight.NORMAL)
@@ -334,17 +307,14 @@ class CalendarWidget(Gtk.DrawingArea):
         ext = cr.text_extents(ds)
         cr.move_to(cx + cw / 2 - ext.width / 2, cy + 22); cr.show_text(ds)
 
-        # 节日角标
         has_dot = (info.holiday_name or info.festival) and in_month and not is_sel
         if has_dot:
-            dot_color = HOLIDAY_DOT if info.holiday_name else FESTIVAL_DOT
-            _rgba(cr, dot_color)
+            _rgba(cr, HOLIDAY_DOT if info.holiday_name else FESTIVAL_DOT)
             cr.arc(cx + cw - 8, cy + 8, 3, 0, 6.283); cr.fill()
 
-        # 农历
         sub = info.badge or info.lunar_label
         _font(cr, 10)
-        _rgba(cr, WHITE if is_sel else (*TEXT_MUTED[:3], 0.7))
+        _rgba(cr, WHITE if is_sel else (*TEXT_MUTED[:3], 0.55))
         ext2 = cr.text_extents(sub)
         cr.move_to(cx + cw / 2 - ext2.width / 2, cy + 40); cr.show_text(sub)
 
@@ -352,19 +322,16 @@ class CalendarWidget(Gtk.DrawingArea):
 
     def _draw_footer(self, cr):
         fy = H - FOOTER_H
-        # 渐变背景
         grad = cairo.LinearGradient(0, fy, 0, H)
-        grad.add_color_stop_rgba(0, *FOOTER_BG)
-        grad.add_color_stop_rgba(1, 0.92, 0.95, 0.96, 0.85)
+        grad.add_color_stop_rgba(0, *FOOTER_BG_TOP)
+        grad.add_color_stop_rgba(1, *FOOTER_BG_BOT)
         cr.set_source(grad)
         cr.rectangle(0, fy, W, FOOTER_H); cr.fill()
 
-        # 分割线
         _rgba(cr, DIVIDER)
         cr.set_line_width(1)
         cr.move_to(0, fy); cr.line_to(W, fy); cr.stroke()
 
-        # 选中日大数字
         info = self._svc.get_day_info(self._sel)
         _rgba(cr, ACCENT)
         _font(cr, 26, cairo.FontWeight.BOLD)
@@ -372,7 +339,6 @@ class CalendarWidget(Gtk.DrawingArea):
         d_ext = cr.text_extents(ds)
         cr.move_to(20, fy + 32); cr.show_text(ds)
 
-        # 日期详情
         parts = [info.weekday, info.lunar_label]
         if info.festival: parts.append(info.festival)
         if info.holiday_name: parts.append(info.holiday_name)
@@ -382,15 +348,14 @@ class CalendarWidget(Gtk.DrawingArea):
         _font(cr, 12)
         cr.move_to(70, fy + 24); cr.show_text(detail)
 
-        # 快捷键提示
-        _rgba(cr, (*TEXT_MUTED[:3], 0.5))
+        _rgba(cr, (*TEXT_MUTED[:3], 0.35))
         _font(cr, 9)
         hint = "Esc 关闭"
         h_ext = cr.text_extents(hint)
         cr.move_to(W - h_ext.width - 16, fy + 34); cr.show_text(hint)
 
 
-# ── 工具函数 ────────────────────────────────────────────────
+# ── 工具 ────────────────────────────────────────────────────
 
 def _rrect(cr, x, y, w, h, r):
     cr.new_sub_path()
@@ -400,6 +365,32 @@ def _rrect(cr, x, y, w, h, r):
     cr.arc(x + r, y + r, r, 3.14159, 4.71239)
     cr.close_path()
 
+
+def _clip_bottom_rounded(cr, w, h, r):
+    cr.new_sub_path()
+    cr.move_to(0, 0)
+    cr.line_to(w, 0)
+    cr.line_to(w, h - r)
+    cr.arc(w - r, h - r, r, 0, 1.5708)
+    cr.line_to(r, h)
+    cr.arc(r, h - r, r, 1.5708, 3.14159)
+    cr.close_path()
+    cr.clip()
+
+
+def _stroke_bottom_rounded(cr, w, h, r):
+    cr.new_sub_path()
+    cr.move_to(0, 0)
+    cr.line_to(w, 0)
+    cr.line_to(w, h - r)
+    cr.arc(w - r, h - r, r, 0, 1.5708)
+    cr.line_to(r, h)
+    cr.arc(r, h - r, r, 1.5708, 3.14159)
+    cr.close_path()
+    cr.stroke()
+
+
+# ── 入口 ────────────────────────────────────────────────────
 
 def run_layer_shell_calendar() -> int:
     Gtk4LayerShell.is_supported()
@@ -411,14 +402,6 @@ def run_layer_shell_calendar() -> int:
 
 
 def _on_activate(app: Gtk.Application) -> None:
-    # CSS: DrawingArea 透明背景
-    css = Gtk.CssProvider()
-    css.load_from_data(b"drawingarea.transparent { background: transparent; }")
-    Gtk.StyleContext.add_provider_for_display(
-        Gdk.Display.get_default(),
-        css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-    )
-
     win = Gtk.ApplicationWindow(application=app)
     win.set_title("中文日历")
     win.set_resizable(False)
@@ -435,7 +418,6 @@ def _on_activate(app: Gtk.Application) -> None:
 
     cal = CalendarWidget()
     cal.set_size_request(W, H)
-    cal.add_css_class("transparent")
     win.set_child(cal)
     win.present()
 
@@ -443,18 +425,15 @@ def _on_activate(app: Gtk.Application) -> None:
 def _pick_monitor(win) -> None:
     import subprocess
     try:
-        r = subprocess.run(
-            ["niri", "msg", "focused-output"],
-            capture_output=True, text=True, timeout=3,
-        )
+        r = subprocess.run(["niri", "msg", "focused-output"],
+                           capture_output=True, text=True, timeout=3)
         name = r.stdout.strip()
         if name:
-            from gi.repository import Gdk  # noqa: E402
+            from gi.repository import Gdk as _Gdk  # noqa: E402
             display = Gtk.Widget.get_display(win)
             for m in display.get_monitors():
                 if m.get_connector() == name:
                     Gtk4LayerShell.set_monitor(win, m)
-                    logger.info("layer-shell 绑定到显示器 %s", name)
                     return
     except Exception:
         pass
