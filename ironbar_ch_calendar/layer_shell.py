@@ -188,6 +188,11 @@ class CalendarWidget(Gtk.DrawingArea):
         self._draw_weekdays(cr)
         self._draw_cells(cr)
         self._draw_footer(cr)
+        # 窗口外框
+        _rgba(cr, (0.35, 0.37, 0.42, 0.9))
+        cr.set_line_width(1.5)
+        cr.rectangle(0.5, 0.5, w - 1, h - 1)
+        cr.stroke()
 
     # ── 头部 ────────────────────────────────────────────────
 
