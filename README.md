@@ -4,6 +4,12 @@
 
 参考实现：fuzzel、SwayNotificationCenter、wofi
 
+## 效果预览
+
+![日历模式示例](a1.png)
+
+![速记模式示例](a2.png)
+
 ## 一键安装
 
 ```bash
