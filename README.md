@@ -59,6 +59,7 @@ $clock = {
 - 传统节日（春节、元宵、清明、端午、中秋、重阳、除夕）
 - 中国法定节假日 + 调休（chinesecalendar）
 - 周末列淡底、节日角标、今日光环
+- 速记模式：多行文本输入，自动保存到本地
 - Esc / ✕ / 点击外部关闭
 - ironbar 高度自动检测
 
@@ -84,3 +85,4 @@ ironbar_ch_calendar/
 - **日历尺寸**：改 `layer_shell.py` 中 `W, H`
 - **水平偏移**：改 `GRID_X`
 - **配色**：改颜色 RGBA 常量
+- **速记数据**：默认保存到 `~/.local/share/ironbar-ch-calendar/shorthand.txt`；如果设置了 `XDG_DATA_HOME`，则保存到 `$XDG_DATA_HOME/ironbar-ch-calendar/shorthand.txt`

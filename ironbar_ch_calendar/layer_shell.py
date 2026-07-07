@@ -19,7 +19,7 @@ import gi  # noqa: E402
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
-from gi.repository import Gtk, Gtk4LayerShell  # noqa: E402
+from gi.repository import GLib, Gtk, Gtk4LayerShell  # noqa: E402
 
 from .calendar_service import CalendarService
 
@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 W, H = 560, 500
 HEADER_H = 42
 FOOTER_H = 52
+WINDOW_R = 14
+SHORTHAND_MARGIN = 18
+SHORTHAND_SAVE_DELAY_MS = 600
 CELL_W, CELL_H = 68, 56
 GRID_X = 24
 GRID_Y = HEADER_H + 24
@@ -55,7 +58,14 @@ def _detect_ironbar_height() -> int:
     return 30
 
 
-MARGIN_TOP = _detect_ironbar_height() - 10
+MARGIN_TOP = _detect_ironbar_height()
+
+
+def _data_home() -> Path:
+    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
+
+
+SHORTHAND_PATH = _data_home() / "ironbar-ch-calendar" / "shorthand.txt"
 
 # ── 轻量浅色主题（贴近透明 WM / ironbar）──────────────────
 # 不使用窗口级透明，避免文字一起变淡；通过更浅的冷灰面板降低压迫感。
@@ -96,29 +106,147 @@ def _rgb(cr, rgb):
     cr.set_source_rgb(*rgb)
 
 
-class CalendarWidget(Gtk.DrawingArea):
+def _begin_window_panel(cr, w, h):
+    cr.save()
+    _rrect(cr, 0, 0, w, h, WINDOW_R)
+    cr.clip()
+    _rgb(cr, BG)
+    cr.paint()
+
+
+def _finish_window_panel(cr, w, h):
+    cr.restore()
+    _rgb(cr, BORDER)
+    cr.set_line_width(1)
+    _rrect(cr, 0.5, 0.5, w - 1, h - 1, WINDOW_R)
+    cr.stroke()
+
+
+class CalendarWidget(Gtk.Overlay):
     def __init__(self) -> None:
         super().__init__()
+        self.set_name("calendar-root")
         self._svc = CalendarService()
         t = date.today()
         self._year, self._month, self._sel = t.year, t.month, t
         self._hover_cell: tuple[int, int] | None = None
         self._hover_btn: str | None = None
+        self._save_source_id: int | None = None
+
         self.set_size_request(W, H)
-        self.set_draw_func(self._on_draw)
+        self._canvas = Gtk.DrawingArea()
+        self._canvas.set_name("calendar-canvas")
+        self._canvas.set_size_request(W, H)
+        self._canvas.set_draw_func(self._on_draw_calender)
+        self.set_child(self._canvas)
+
+        self._shorthand_scroller, self._text_view = self._build_shorthand_editor()
+        self._text_buffer = self._text_view.get_buffer()
+        self._text_buffer.set_text(self._load_shorthand())
+        self._text_buffer.connect("changed", self._on_shorthand_changed)
+        self.add_overlay(self._shorthand_scroller)
+        self.show_shorthand = False
 
         motion = Gtk.EventControllerMotion.new()
         motion.connect("motion", self._on_motion)
         motion.connect("leave", self._on_leave)
-        self.add_controller(motion)
+        self._canvas.add_controller(motion)
 
         click = Gtk.GestureClick.new()
         click.connect("pressed", self._on_click)
-        self.add_controller(click)
+        self._canvas.add_controller(click)
 
         key = Gtk.EventControllerKey.new()
         key.connect("key-pressed", self._on_key)
         self.add_controller(key)
+
+        editor_key = Gtk.EventControllerKey.new()
+        editor_key.connect("key-pressed", self._on_key)
+        self._text_view.add_controller(editor_key)
+
+    # ── 速记逻辑 ────────────────────────────────────────────
+    def _set_shorthand(self):
+        if self.show_shorthand == True:
+            self._flush_shorthand()
+            self._shorthand_scroller.set_visible(False)
+            self._canvas.set_draw_func(self._on_draw_calender)
+            self._go_today()
+            self.show_shorthand = False
+        else:
+            self.show_shorthand = True
+            self._shorthand_scroller.set_visible(True)
+            self._canvas.set_draw_func(self._on_draw_shorthand)
+            self._text_view.grab_focus()
+
+        self._canvas.queue_draw()
+
+    def _build_shorthand_editor(self) -> tuple[Gtk.ScrolledWindow, Gtk.TextView]:
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_name("shorthand-editor")
+        scrolled.set_margin_top(HEADER_H + SHORTHAND_MARGIN)
+        scrolled.set_margin_bottom(SHORTHAND_MARGIN)
+        scrolled.set_margin_start(SHORTHAND_MARGIN)
+        scrolled.set_margin_end(SHORTHAND_MARGIN)
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_visible(False)
+
+        text_view = Gtk.TextView()
+        text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        text_view.set_left_margin(12)
+        text_view.set_right_margin(12)
+        text_view.set_top_margin(10)
+        text_view.set_bottom_margin(10)
+        text_view.set_vexpand(True)
+        scrolled.set_child(text_view)
+        return scrolled, text_view
+
+    def _load_shorthand(self) -> str:
+        try:
+            return SHORTHAND_PATH.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return ""
+        except OSError:
+            logger.exception("读取速记内容失败：%s", SHORTHAND_PATH)
+            return ""
+
+    def _on_shorthand_changed(self, buffer: Gtk.TextBuffer) -> None:
+        if self._save_source_id is not None:
+            GLib.source_remove(self._save_source_id)
+        self._save_source_id = GLib.timeout_add(
+            SHORTHAND_SAVE_DELAY_MS,
+            self._schedule_shorthand_save,
+        )
+
+    def _schedule_shorthand_save(self) -> bool:
+        self._save_source_id = None
+        self._write_shorthand(self._get_shorthand_text())
+        return GLib.SOURCE_REMOVE
+
+    def _flush_shorthand(self) -> None:
+        if self._save_source_id is not None:
+            GLib.source_remove(self._save_source_id)
+            self._save_source_id = None
+        self._write_shorthand(self._get_shorthand_text())
+
+    def close(self) -> None:
+        self._flush_shorthand()
+
+    def _get_shorthand_text(self) -> str:
+        start = self._text_buffer.get_start_iter()
+        end = self._text_buffer.get_end_iter()
+        return self._text_buffer.get_text(start, end, True)
+
+    def _write_shorthand(self, text: str) -> None:
+        try:
+            SHORTHAND_PATH.parent.mkdir(parents=True, exist_ok=True)
+            SHORTHAND_PATH.write_text(text, encoding="utf-8")
+        except OSError:
+            logger.exception("保存速记内容失败：%s", SHORTHAND_PATH)
+
+    def _on_draw_shorthand(self, area, cr, w, h):
+        _begin_window_panel(cr, w, h)
+        self._draw_header(cr)
+        _finish_window_panel(cr, w, h)
 
     # ── 日历逻辑 ────────────────────────────────────────────
 
@@ -126,19 +254,19 @@ class CalendarWidget(Gtk.DrawingArea):
         if self._month == 1: self._year -= 1; self._month = 12
         else: self._month -= 1
         self._sel = date(self._year, self._month, 1)
-        self.queue_draw()
+        self._canvas.queue_draw()
 
     def _next_month(self):
         if self._month == 12: self._year += 1; self._month = 1
         else: self._month += 1
         self._sel = date(self._year, self._month, 1)
-        self.queue_draw()
+        self._canvas.queue_draw()
 
     def _go_today(self):
         t = date.today()
         self._year, self._month, self._sel = t.year, t.month, t
         self._svc = CalendarService(today=t)
-        self.queue_draw()
+        self._canvas.queue_draw()
 
     def _click_cell(self, col, row):
         md = calendar.Calendar(firstweekday=0).monthdatescalendar(self._year, self._month)
@@ -147,7 +275,7 @@ class CalendarWidget(Gtk.DrawingArea):
             self._sel = d
             if d.month != self._month or d.year != self._year:
                 self._year, self._month = d.year, d.month
-            self.queue_draw()
+            self._canvas.queue_draw()
 
     def _hit_cell(self, px, py):
         for row in range(6):
@@ -165,19 +293,20 @@ class CalendarWidget(Gtk.DrawingArea):
         self._hover_cell = self._hit_cell(x, y)
         self._hover_btn = self._hit_header(x, y)
         if old_cell != self._hover_cell or old_btn != self._hover_btn:
-            self.queue_draw()
+            self._canvas.queue_draw()
 
     def _on_leave(self, controller):
         if self._hover_cell or self._hover_btn:
             self._hover_cell = self._hover_btn = None
-            self.queue_draw()
-
+            self._canvas.queue_draw()
+    # 判读是否名字的逻辑
     def _hit_header(self, x, y):
         if 4 <= y < HEADER_H - 4:
             if x < 40: return "prev"
             if W - 130 <= x < W - 82: return "today"
             if W - 55 <= x < W - 35: return "next"
             if W - 30 <= x < W: return "close"
+            if W - 180 <= x < W - 122: return "shorthand"
         return None
 
     def _on_click(self, gesture, n_press, x, y):
@@ -186,6 +315,7 @@ class CalendarWidget(Gtk.DrawingArea):
         elif btn == "today": self._go_today()
         elif btn == "next": self._next_month()
         elif btn == "close": self.get_root().close()
+        elif btn == "shorthand": self._set_shorthand()
         else:
             cell = self._hit_cell(x, y)
             if cell: self._click_cell(*cell)
@@ -196,17 +326,14 @@ class CalendarWidget(Gtk.DrawingArea):
 
     # ── 渲染 ────────────────────────────────────────────────
 
-    def _on_draw(self, area, cr, w, h):
-        _rgb(cr, BG); cr.paint()
+    def _on_draw_calender(self, area, cr, w, h):
+        _begin_window_panel(cr, w, h)
         self._draw_header(cr)
         self._draw_weekend_tint(cr)
         self._draw_weekdays(cr)
         self._draw_cells(cr)
         self._draw_footer(cr)
-        _rgb(cr, BORDER)
-        cr.set_line_width(1)
-        cr.rectangle(0.5, 0.5, w - 1, h - 1)
-        cr.stroke()
+        _finish_window_panel(cr, w, h)
 
     # ── 头部 ────────────────────────────────────────────────
 
@@ -255,6 +382,22 @@ class CalendarWidget(Gtk.DrawingArea):
         _font(cr, 11, cairo.FontWeight.BOLD)
         t_ext = cr.text_extents("今天")
         cr.move_to(bx + bw / 2 - t_ext.width / 2, by + 15); cr.show_text("今天")
+
+        # 速记按钮
+        bx, by, bw, bh = W - 184, 10, 52, 22
+        if self._hover_btn == "shorthand":
+            _rgb(cr, BTN_HOVER)
+            _rrect(cr, bx, by, bw, bh, 10); cr.fill()
+            label_color = TEXT
+        else:
+            _rgb(cr, BORDER)
+            cr.set_line_width(1)
+            _rrect(cr, bx, by, bw, bh, 10); cr.stroke()
+            label_color = TEXT_MUTED
+        _rgb(cr, label_color)
+        _font(cr, 11, cairo.FontWeight.BOLD)
+        t_ext = cr.text_extents("速记")
+        cr.move_to(bx + bw / 2 - t_ext.width / 2, by + 15); cr.show_text("速记")
 
     def _draw_arrow(self, cr, text, x, y, name):
         is_hover = self._hover_btn == name
@@ -428,6 +571,7 @@ def run_layer_shell_calendar() -> int:
 
 def _on_activate(app: Gtk.Application) -> None:
     win = Gtk.ApplicationWindow(application=app)
+    win.set_name("calendar-window")
     win.set_title("中文日历")
     win.set_resizable(False)
 
@@ -438,13 +582,40 @@ def _on_activate(app: Gtk.Application) -> None:
     Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, MARGIN_TOP)
     Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
 
-    _pick_monitor(win)
-    win.connect("close-request", lambda *_: app.quit())
-
     cal = CalendarWidget()
     cal.set_size_request(W, H)
     win.set_child(cal)
+    _pick_monitor(win)
+
+    def _on_close_request(*_):
+        cal.close()
+        app.quit()
+
+    win.connect("close-request", _on_close_request)
+    _install_transparent_css(win)
     win.present()
+
+
+def _install_transparent_css(win: Gtk.ApplicationWindow) -> None:
+    provider = Gtk.CssProvider()
+    provider.load_from_data(
+        b"""
+        #calendar-window,
+        #calendar-root,
+        #calendar-canvas {
+            background: transparent;
+        }
+
+        #shorthand-editor {
+            border-radius: 10px;
+        }
+        """
+    )
+    Gtk.StyleContext.add_provider_for_display(
+        Gtk.Widget.get_display(win),
+        provider,
+        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+    )
 
 
 def _pick_monitor(win) -> None:
